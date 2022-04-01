@@ -126,15 +126,6 @@ if __name__ == '__main__':
         transforms.RandomRotation(15),
         transforms.ToTensor(),] )
     set=torchvision.datasets.ImageFolder('./dataset/',transform_train)
-    datas=[]
-    labels=[]
-    for i in range(len(set)):
-        datas.append(set[i][0])
-        labels.append(set[i][1])
-    ros = RandomOverSampler(random_state=0)
-    datas_resample,labels_resample = ros.fit_resample(datas,labels)
-    print(len(datas_resample))
-    print(datas_resample)
     classes=('01单核系','02原粒','03早幼粒','04中幼粒','05晚幼粒','06杆状核','07分叶核','08其他粒系','09其他红系','10中幼红','11晚幼红','12原淋细胞','13成熟淋巴细胞','14其他淋巴细胞')
     # print(set.imgs[8000][0])
     train_size=int(0.8*len(set))
