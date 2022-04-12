@@ -22,6 +22,7 @@ from imblearn.over_sampling import RandomOverSampler
 
 import resnet
 import googlenet
+import datasets
 
 
 def train(epochtimes):
@@ -125,13 +126,13 @@ if __name__ == '__main__':
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(15),
         transforms.ToTensor(),] )
-    set=torchvision.datasets.ImageFolder('./dataset/',transform_train)
+    # set=torchvision.datasets.ImageFolder('./dataset/',transform_train)
     classes=('01单核系','02原粒','03早幼粒','04中幼粒','05晚幼粒','06杆状核','07分叶核','08其他粒系','09其他红系','10中幼红','11晚幼红','12原淋细胞','13成熟淋巴细胞','14其他淋巴细胞')
     # print(set.imgs[8000][0])
-    train_size=int(0.8*len(set))
-    test_size=int(len(set)-train_size)
-    trainset,testset= torch.utils.data.random_split(dataset=set,lengths=[train_size,test_size])
-    print(len(trainset),len(testset))
+    # train_size=int(0.8*len(set))
+    # test_size=int(len(set)-train_size)
+    # trainset,testset= torch.utils.data.random_split(dataset=set,lengths=[train_size,test_size])
+    # print(len(trainset),len(testset))
     # print('Trainset')
     # ls=-1
     # cnt=0
@@ -144,8 +145,10 @@ if __name__ == '__main__':
     #         cnt=1
     #         ls=trainset.imgs[i][1]
     
+    trainset = datasets.BatchDataset(transform_train)
+    testset = datasets.RandomDataset(transform_train)
+
     trainloader=DataLoader(trainset,64,shuffle=True,num_workers=16,pin_memory=True)
-    
     testloader=DataLoader(testset,64,shuffle=True,num_workers=16,pin_memory=True)
     
     print('Start Training')
