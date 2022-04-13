@@ -25,34 +25,37 @@ import googlenet
 import datasets
 
 
-def train(epochtimes):
-    optimizer=optim.SGD(net.parameters(),args.lr,momentum=0.9)
-    criterion=nn.CrossEntropyLoss()
-    train_acc=torchmetrics.Accuracy().to(device)
+def train(start_epoch,epochtimes):
+    global best_acc
     timestd = time.time()
-    best_acc=0.0
+    
     writer=SummaryWriter('./log/',10)
-    for epoch in range(epochtimes):
+    for epoch in range(start_epoch,epochtimes):
         running_loss = 0.0
         net.train()
-        # print('epoch')
+        # print('epoch:{}'.format(epoch))
         for i,data in enumerate(trainloader,0):
             inputs,labels = data
-            
+            # print(inputs,labels)
             inputs,labels=Variable(inputs).to(device),Variable(labels).to(device)
-            
+            # print(labels.size())
             optimizer.zero_grad()
             outputs=net(inputs).to(device)
             loss=criterion(outputs,labels)
             #train_acc(outputs,labels)
             loss.backward()
             optimizer.step()
-            # print(loss)
+            # print("loss:{}".format(loss))
             running_loss += loss.data
         #acc=train_acc.compute()
         
         if epoch%10==0:
-            torch.save(net,'resnet_auto.pkl')
+            torch.save({
+                    'epoch': epoch ,
+                    'state_dict':net.state_dict(),
+                    'best_acc':best_acc,
+                    'optimizer':optimizer.state_dict(),
+                    },'./backup/resnet_auto.pkl')
             print('autosave resnet_auto.pkl')
         
         net.eval()
@@ -76,7 +79,7 @@ def train(epochtimes):
 
         acc=train_acc.compute()
         best_acc=max(acc,best_acc)
-        print('[ epoch:%d/%d ] time:%d s loss:%.3f acc:%.3f best_acc:%.3f' % (epoch+1,epochtimes, time.time()-timestd,running_loss/len(trainloader),acc,best_acc))
+        print('[ epoch:%d/%d ] time:%d s loss:%.3f acc:%.3f best_acc:%.3f' % (epoch+1,epochtimes, time.time()-timestd,running_loss/len(trainloader),acc*100,best_acc*100))
         #loss_list.append(running_loss/len(trainloader))
         #accuracy_list.append(acc)
         writer.add_scalar('Loss',loss,epoch)
@@ -89,8 +92,12 @@ def train(epochtimes):
         running_loss=0
         train_acc.reset()
     print('Finished Training')
-    torch.save(net,'resnet.pkl')
-    torch.save(net.state_dict(),'resnet_param.pkl')
+    torch.save({
+        'epoch': epoch ,
+        'state_dict':net.state_dict(),
+        'best_acc':best_acc,
+        'optimizer':optimizer.state_dict(),
+        },'./backup/resnet.pkl')
 
 
 if __name__ == '__main__':
@@ -99,26 +106,40 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CellResnet')
     #parser.add_argument('-net', type=str, required=True, help='net type')
     parser.add_argument('-gpu', action='store_true', default=False, help='use gpu or not')
-    parser.add_argument('-epoch',type=int,default=1000,help='epoch times')
-    parser.add_argument('-b', type=int, default=32, help='batch size for dataloader') 
+    parser.add_argument('-epoch',type=int,default=500,help='epoch times')
+    parser.add_argument('-start_epoch',type=int,default=1,help='start epoch times')
+    parser.add_argument('-b', type=int, default=64, help='batch size for dataloader') 
     parser.add_argument('-warm', type=int, default=1, help='warm up training phase')
     parser.add_argument('-lr', type=float, default=0.06, help='initial learning rate')
     parser.add_argument('-resume', action='store_true', default=False, help='resume training')
+    parser.add_argument('--resume_path', default='./backup/resnet_auto.pkl', type=str, metavar='PATH',
+                    help='path to latest checkpoint ')
     args = parser.parse_args()
     
-    
 
-    #net=resnet.resnet50(
-    net=models.resnet50(pretrained=True)
-    # net.load_state_dict(torch.load('./resnet50-19c8e357.pth'))
-    print(torch.cuda.is_available())
     device=torch.device('cuda:1'if torch.cuda.is_available() and args.gpu else 'cpu')
-    print(device)
-    net.to(device)
-    #if args.resume:
-    #    resume_point=torch.load('resnet.pkl')
-    #    net.load_state_dict('resnet_param.pkl')    
+    print('program run on {}'.format(device))
 
+    net=models.resnet50(pretrained=True)
+    net.to(device)
+
+    optimizer=optim.SGD(net.parameters(),args.lr,momentum=0.9)
+    criterion=nn.CrossEntropyLoss()
+    train_acc=torchmetrics.Accuracy().to(device)
+    best_acc=0.0
+
+    if args.resume:
+        if os.path.isfile(args.resume_path):
+            print('loading checkopint {}'.format(args.resume_path))
+            resume_point=torch.load(args.resume_path)
+            print('check point data:{}'.format(resume_point['epoch']))
+            args.start_epoch = resume_point['epoch']
+            net.load_state_dict(resume_point['state_dict'])
+            optimizer.load_state_dict(resume_point['optimizer'])
+            best_acc = resume_point['best_acc']
+            print('loaded checkpoint {}(epoch: {})'.format(args.resume_path,args.start_epoch))
+        else:
+            print('no checkpoint found at {}'.format(args.resume_path))
     
     transform_train=torchvision.transforms.Compose(
         [transforms.Resize([216,216]),
@@ -132,7 +153,7 @@ if __name__ == '__main__':
     # train_size=int(0.8*len(set))
     # test_size=int(len(set)-train_size)
     # trainset,testset= torch.utils.data.random_split(dataset=set,lengths=[train_size,test_size])
-    # print(len(trainset),len(testset))
+    
     # print('Trainset')
     # ls=-1
     # cnt=0
@@ -147,12 +168,12 @@ if __name__ == '__main__':
     
     trainset = datasets.BatchDataset(transform_train)
     testset = datasets.RandomDataset(transform_train)
+    print('loaded trainset:{} testset:{}'.format(len(trainset),len(testset)))
+    trainloader=DataLoader(trainset,args.b,shuffle=True,num_workers=16,pin_memory=True)
+    testloader=DataLoader(testset,args.b,shuffle=True,num_workers=16,pin_memory=True)
 
-    trainloader=DataLoader(trainset,64,shuffle=True,num_workers=16,pin_memory=True)
-    testloader=DataLoader(testset,64,shuffle=True,num_workers=16,pin_memory=True)
-    
     print('Start Training')
-    train(args.epoch)
+    train(args.start_epoch,args.epoch)
 
 
                                                                                                                     

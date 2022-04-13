@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data import Dataset
-from torch.utils.sampler import BatchSampler
 from PIL import Image
 import numpy as np
 
@@ -35,7 +34,7 @@ class BatchDataset(Dataset):
         img = self.dataloader(image_path)
         img = self.transform(img)
         label = int(label)-1
-        label = torch.LongTensor([label])
+        # label = torch.LongTensor([label])
 
         return [img,label]
 
@@ -58,7 +57,7 @@ class RandomDataset(Dataset):
         img = self.dataloader(image_path)
         img = self.transform(img)
         label = int(label)-1
-        label = torch.LongTensor([label])
+        # label = torch.LongTensor([label])
 
         return [img, label]
 
