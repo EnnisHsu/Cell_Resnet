@@ -17,7 +17,7 @@ class BatchDataset(Dataset):
         self.transform = transform
         self.dataloader = dataloader
         
-        with open('/home/cell/datasets/cell/train.txt','r') as fid:
+        with open('/home/cell/datasets/cell/4:1/train.txt','r') as fid:
             self.imglist = fid.readlines()
         
         self.labels = []
@@ -46,7 +46,7 @@ class RandomDataset(Dataset):
         self.transform = transform
         self.dataloader = dataloader
 
-        with open('/home/cell/datasets/cell/val.txt', 'r') as fid:
+        with open('/home/cell/datasets/cell/4:1/val.txt', 'r') as fid:
             self.imglist = fid.readlines()
 
     def __getitem__(self, index):

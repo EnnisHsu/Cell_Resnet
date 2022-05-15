@@ -29,7 +29,7 @@ def train(start_epoch,epochtimes):
     global best_acc
     timestd = time.time()
     
-    writer=SummaryWriter('./log/',10)
+    writer=SummaryWriter('./log/Resnet-4:1-baseline'+str(time.ctime()),10)
     for epoch in range(start_epoch,epochtimes):
         running_loss = 0.0
         net.train()
@@ -86,9 +86,9 @@ def train(start_epoch,epochtimes):
         writer.add_scalar('Accuracy',acc,epoch)
         for i in range(14):
             if (class_total[i]!=0):
-                print('Accuracy of %5s : %2d %%' % (classes[i],100*class_correct[i]/class_total[i]))
+                print('Accuracy of %5s(%d) : %.3f %%' % (classes[i],class_total[i],100*class_correct[i]/class_total[i]))
             else:
-                print('Accuracy of %5s : %2d %%' % (classes[i],-1))
+                print('Accuracy of %5s(%d) : %.3f %%' % (classes[i],class_total[i],-1))
         running_loss=0
         train_acc.reset()
     print('Finished Training')
@@ -105,19 +105,19 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='CellResnet')
     #parser.add_argument('-net', type=str, required=True, help='net type')
-    parser.add_argument('-gpu', action='store_true', default=False, help='use gpu or not')
-    parser.add_argument('-epoch',type=int,default=500,help='epoch times')
-    parser.add_argument('-start_epoch',type=int,default=1,help='start epoch times')
-    parser.add_argument('-b', type=int, default=64, help='batch size for dataloader') 
+    parser.add_argument('-gpu',action='store_true', default=False,help='use gpu or not')
+    parser.add_argument('-epoch',type=int,default=100,help='epoch times')
+    parser.add_argument('-start_epoch',type=int,default=0,help='start epoch times')
+    parser.add_argument('-b', type=int, default=32, help='batch size for dataloader') 
     parser.add_argument('-warm', type=int, default=1, help='warm up training phase')
-    parser.add_argument('-lr', type=float, default=0.06, help='initial learning rate')
+    parser.add_argument('-lr', type=float, default=0.01, help='initial learning rate')
     parser.add_argument('-resume', action='store_true', default=False, help='resume training')
     parser.add_argument('--resume_path', default='./backup/resnet_auto.pkl', type=str, metavar='PATH',
                     help='path to latest checkpoint ')
     args = parser.parse_args()
     
 
-    device=torch.device('cuda:1'if torch.cuda.is_available() and args.gpu else 'cpu')
+    device=torch.device('cuda'if torch.cuda.is_available() and args.gpu else 'cpu')
     print('program run on {}'.format(device))
 
     net=models.resnet50(pretrained=True)
