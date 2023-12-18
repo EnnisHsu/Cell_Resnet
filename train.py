@@ -28,38 +28,34 @@ import datasets
 def train(start_epoch,epochtimes):
     global best_acc
     timestd = time.time()
-    
-    writer=SummaryWriter('./log/Resnet-4:1-baseline'+str(time.ctime()),10)
+    best_correct = list(0. for i in range(14))
+    best_total = list(0. for i in range(14))
+    writer=SummaryWriter('./log/Resnet-4:1'+str(time.ctime()),10)
     for epoch in range(start_epoch,epochtimes):
+        # train epoch
         running_loss = 0.0
+        train_acc.reset()
+        acc=0.0
         net.train()
         # print('epoch:{}'.format(epoch))
-        for i,data in enumerate(trainloader,0):
-            inputs,labels = data
-            # print(inputs,labels)
+        for i,(inputs,labels) in enumerate(trainloader,0):
             inputs,labels=Variable(inputs).to(device),Variable(labels).to(device)
-            # print(labels.size())
             optimizer.zero_grad()
             outputs=net(inputs).to(device)
             loss=criterion(outputs,labels)
-            #train_acc(outputs,labels)
+            train_acc(outputs,labels)
             loss.backward()
             optimizer.step()
-            # print("loss:{}".format(loss))
+            acc=train_acc.compute()*100
             running_loss += loss.data
-        #acc=train_acc.compute()
+            print("train[%d][%d/%d] Time:%s(%f) train_acc = %.4f train_loss = %.4f" 
+                % (epoch+1,i+1,len(trainloader),time.ctime(),time.time()-timestd, acc, (running_loss/(i+1))))
         
-        if epoch%10==0:
-            torch.save({
-                    'epoch': epoch ,
-                    'state_dict':net.state_dict(),
-                    'best_acc':best_acc,
-                    'optimizer':optimizer.state_dict(),
-                    },'./backup/resnet_auto.pkl')
-            print('autosave resnet_auto.pkl')
-        
+        # test epoch
+        test_acc.reset()
         net.eval()
         acc=0.0
+        running_loss=0
         class_correct = list(0. for i in range(14))
         class_total = list(0. for i in range(14))
         for i,data in enumerate(testloader,0):
@@ -68,30 +64,58 @@ def train(start_epoch,epochtimes):
             inputs,labels=Variable(inputs).to(device),Variable(labels).to(device)
 
             outputs=net(inputs).to(device)
-            train_acc(outputs,labels)
+            loss=criterion(outputs,labels)
+            test_acc(outputs,labels)
+            loss.backward()
+            running_loss += loss
             _,predicted = torch.max(outputs,1)
             c = (predicted == labels).squeeze()
             for j in range(labels.numel()):
-                
                 label = labels[j]
                 class_correct[label] += c[j].item()
                 class_total[label] +=1
+            
+            acc=test_acc.compute()*100
+            print("test[%d][%d/%d] Time:%s(%f) test_acc = %.4f test_loss = %.4f" 
+                % (epoch+1,i+1,len(testloader),time.ctime(),time.time()-timestd, acc,(running_loss/(i+1))))
 
-        acc=train_acc.compute()
-        best_acc=max(acc,best_acc)
-        print('[ epoch:%d/%d ] time:%d s loss:%.3f acc:%.3f best_acc:%.3f' % (epoch+1,epochtimes, time.time()-timestd,running_loss/len(trainloader),acc*100,best_acc*100))
+        
+        if acc>best_acc:
+            best_acc=acc
+            torch.save({
+            'epoch': epoch ,
+            'state_dict':net.state_dict(),
+            'best_acc':best_acc,
+            'optimizer':optimizer.state_dict(),
+            },'./backup/resnet_best.pkl')
+            best_correct=class_correct
+            best_total=class_total
+        print('[ epoch:%d/%d ] time:%d s loss:%.3f acc:%.3f best_acc:%.3f' % (epoch+1,epochtimes, time.time()-timestd,running_loss/len(trainloader),acc,best_acc))
         #loss_list.append(running_loss/len(trainloader))
         #accuracy_list.append(acc)
         writer.add_scalar('Loss',loss,epoch)
         writer.add_scalar('Accuracy',acc,epoch)
         for i in range(14):
             if (class_total[i]!=0):
-                print('Accuracy of %5s(%d) : %.3f %%' % (classes[i],class_total[i],100*class_correct[i]/class_total[i]))
+                print('Accuracy of %5s(%d/%d) : %.3f %%' % (classes[i],class_correct[i],class_total[i],100*class_correct[i]/class_total[i]))
             else:
-                print('Accuracy of %5s(%d) : %.3f %%' % (classes[i],class_total[i],-1))
-        running_loss=0
+                print('Accuracy of %5s(%d/%d) : %.3f %%' % (classes[i],-1,class_total[i],-1))
+        if epoch%10==0:
+            torch.save({
+                    'epoch': epoch ,
+                    'state_dict':net.state_dict(),
+                    'best_acc':best_acc,
+                    'optimizer':optimizer.state_dict(),
+                    },'./backup/resnet_auto.pkl')
+            print('autosave resnet_auto.pkl')       
         train_acc.reset()
     print('Finished Training')
+    print('Epoch:%d best_acc:%.3f' % (epochtimes,best_acc))
+    for i in range(14):
+        if (best_total[i]!=0):
+            print('Accuracy of %5s(%d) : %3f %%' % (classes[i],best_total[i],100*best_correct[i]/best_total[i]))
+        else:
+            print('Accuracy of %5s(%d): %3f %%' % (classes[i],best_total[i],-1))
     torch.save({
         'epoch': epoch ,
         'state_dict':net.state_dict(),
@@ -111,6 +135,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', type=int, default=32, help='batch size for dataloader') 
     parser.add_argument('-warm', type=int, default=1, help='warm up training phase')
     parser.add_argument('-lr', type=float, default=0.01, help='initial learning rate')
+    parser.add_argument('-momentum',type=float,default=0.9,help='initial momentum')
     parser.add_argument('-resume', action='store_true', default=False, help='resume training')
     parser.add_argument('--resume_path', default='./backup/resnet_auto.pkl', type=str, metavar='PATH',
                     help='path to latest checkpoint ')
@@ -123,9 +148,10 @@ if __name__ == '__main__':
     net=models.resnet50(pretrained=True)
     net.to(device)
 
-    optimizer=optim.SGD(net.parameters(),args.lr,momentum=0.9)
+    optimizer=optim.SGD(net.parameters(),args.lr,args.momentum)
     criterion=nn.CrossEntropyLoss()
     train_acc=torchmetrics.Accuracy().to(device)
+    test_acc=torchmetrics.Accuracy().to(device)
     best_acc=0.0
 
     if args.resume:
